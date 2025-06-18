@@ -5,10 +5,30 @@ import plotly.express as px
 from io import BytesIO
 from fpdf import FPDF
 
+# --------------------------
+# Autenticação simples
+# --------------------------
+users = {
+    "weslley": {
+        "name": "Weslley",
+        "password": "smart2024"
+    },
+    "demo": {
+        "name": "Demo User",
+        "password": "1234"
+    }
+}
+
+st.sidebar.title("🔐 Login")
+username = st.sidebar.text_input("Usuário")
+password = st.sidebar.text_input("Senha", type="password")
+if username not in users or users[username]["password"] != password:
+    st.warning("Por favor, entre com usuário e senha válidos.")
+    st.stop()
+
 st.set_page_config(page_title="Dashboard Logística + Comissão", layout="wide")
 st.title("📦 Dashboard de Vendas com Comissão e Logística")
 
-# Função para exportar para PDF
 def gerar_pdf(pedidos, resumo):
     pdf = FPDF()
     pdf.add_page()
@@ -18,7 +38,8 @@ def gerar_pdf(pedidos, resumo):
     pdf.ln(10)
 
     for titulo, valor in resumo.items():
-        pdf.cell(200, 10, txt=f"{titulo}: R$ {valor:,.2f}", ln=True)
+        linha = f"{titulo}: R$ {valor:,.2f}"
+        pdf.cell(200, 10, txt=linha.encode('latin-1', 'ignore').decode('latin-1'), ln=True)
 
     pdf.ln(10)
     pdf.cell(200, 10, txt="Resumo por Cliente", ln=True)
@@ -26,13 +47,14 @@ def gerar_pdf(pedidos, resumo):
 
     por_cliente = pedidos.groupby("Cliente")["Comissão (R$)"].sum().reset_index()
     for _, row in por_cliente.iterrows():
-        pdf.cell(200, 10, txt=f"{row['Cliente']}: R$ {row['Comissão (R$)']:,.2f}", ln=True)
+        linha = f"{row['Cliente']}: R$ {row['Comissão (R$)']:,.2f}"
+        pdf.cell(200, 10, txt=linha.encode('latin-1', 'ignore').decode('latin-1'), ln=True)
 
-    output = BytesIO()
-    pdf.output(output)
-    return output
+    buffer = BytesIO()
+    pdf.output(buffer)
+    buffer.seek(0)
+    return buffer
 
-# Upload
 arquivo = st.file_uploader("📁 Envie a planilha completa (.xlsx)", type=["xlsx"])
 if arquivo:
     try:
@@ -41,7 +63,6 @@ if arquivo:
         entregas = pd.read_excel(arquivo, sheet_name="Entregas")
         faixas = pd.read_excel(arquivo, sheet_name="Faixas_KM")
 
-        # Pré-processamento
         pedidos = pedidos.merge(comissao, on="Categoria", how="left")
         pedidos["Comissão (R$)"] = pedidos["Valor Total"] * pedidos["Comissão (%)"]
         pedidos = pedidos.merge(entregas, on="PedidoID", how="left")
@@ -55,7 +76,6 @@ if arquivo:
 
         pedidos["Custo Logístico"] = pedidos["Distância KM"].apply(lambda x: calcular_faixa(x))
 
-        # Filtros
         with st.sidebar:
             st.header("🔎 Filtros")
             datas = st.date_input("Período", [])
@@ -69,7 +89,6 @@ if arquivo:
         if cliente:
             pedidos = pedidos[pedidos["Cliente"].isin(cliente)]
 
-        # Indicadores
         total_vendas = pedidos["Valor Total"].sum()
         total_comissao = pedidos["Comissão (R$)"].sum()
         total_logistica = pedidos["Custo Logístico"].sum()
@@ -83,26 +102,22 @@ if arquivo:
 
         st.markdown("---")
 
-        # Gráfico de Vendas por Categoria (Pizza)
         st.subheader("🥧 Vendas por Categoria")
         graf_vendas = pedidos.groupby("Categoria")["Valor Total"].sum().reset_index()
         fig_vendas = px.pie(graf_vendas, names="Categoria", values="Valor Total", title="Vendas por Categoria", hole=0.4)
         fig_vendas.update_traces(textinfo='label+percent', hovertemplate="%{label}: R$ %{value:,.2f}")
         st.plotly_chart(fig_vendas, use_container_width=True)
 
-        # Gráfico: Comissão por Categoria
         st.subheader("📊 Comissão por Categoria")
         graf_com_cat = pedidos.groupby("Categoria")["Comissão (R$)"].sum().reset_index()
         fig_com_cat = px.bar(graf_com_cat, x="Categoria", y="Comissão (R$)", text_auto=".2s", title="Comissão por Categoria")
         st.plotly_chart(fig_com_cat, use_container_width=True)
 
-        # Gráfico: Comissão por Cliente
         st.subheader("📊 Comissão por Cliente")
         graf_com_cli = pedidos.groupby("Cliente")["Comissão (R$)"].sum().reset_index()
         fig_com_cli = px.bar(graf_com_cli, x="Cliente", y="Comissão (R$)", text_auto=".2s", title="Comissão por Cliente")
         st.plotly_chart(fig_com_cli, use_container_width=True)
 
-        # Exportar PDF
         st.markdown("---")
         if st.button("📤 Baixar Resumo em PDF"):
             resumo = {
@@ -112,7 +127,7 @@ if arquivo:
                 "Lucro Estimado": lucro_liquido
             }
             pdf_bytes = gerar_pdf(pedidos, resumo)
-            st.download_button("📄 Clique aqui para baixar o PDF", data=pdf_bytes.getvalue(), file_name="resumo_dashboard.pdf")
+            st.download_button("📄 Clique aqui para baixar o PDF", data=pdf_bytes.read(), file_name="resumo_dashboard.pdf")
 
     except Exception as e:
         st.error(f"Erro ao processar a planilha: {e}")
