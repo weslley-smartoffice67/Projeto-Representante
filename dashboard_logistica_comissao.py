@@ -1,5 +1,6 @@
 
 import streamlit as st
+st.set_page_config(page_title="Dashboard Logística + Comissão", layout="wide")
 import pandas as pd
 import plotly.express as px
 from io import BytesIO
@@ -26,7 +27,7 @@ if username not in users or users[username]["password"] != password:
     st.warning("Por favor, entre com usuário e senha válidos.")
     st.stop()
 
-st.set_page_config(page_title="Dashboard Logística + Comissão", layout="wide")
+
 st.title("📦 Dashboard de Vendas com Comissão e Logística")
 
 def gerar_pdf(pedidos, resumo):
